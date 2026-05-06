@@ -1,0 +1,1177 @@
+---
+title: "Factors Influencing Student Academic Performance in Secondary Education"
+author: "Feng Qiu, Keyao Li, Vy Huynh | Group 6"
+date: today
+format:
+  pdf:
+    toc: false
+    number-sections: false
+execute:
+  echo: false
+bibliography: references.bib
+csl: apa.csl
+header-includes:
+  - \usepackage{float}
+  - \floatplacement{table}{H}
+  - \floatplacement{figure}{H}
+---
+```{r}
+#| label: setup-libraries
+#| warning: false
+#| message: false
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(gridExtra)
+```
+
+## Executive Summary
+
+```{r}
+#| label: setup-executive-summary
+#| include: false
+library(tidyverse)
+
+df_es <- read.csv("student-por.csv")
+df_es$reason <- relevel(factor(df_es$reason), ref = "course")
+df_es_clean <- df_es %>% filter(G3 > 0)
+
+model_es_reason <- lm(G3 ~ reason, data = df_es_clean)
+b_es     <- round(coef(model_es_reason), 3)
+s_es     <- summary(model_es_reason)
+r2_es    <- round(s_es$r.squared, 4)
+fstat_es <- s_es$fstatistic
+f_val_es <- round(fstat_es["value"], 2)
+f_df1_es <- fstat_es["numdf"]
+f_df2_es <- fstat_es["dendf"]
+f_p_es   <- round(pf(fstat_es["value"],
+                     fstat_es["numdf"],
+                     fstat_es["dendf"],
+                     lower.tail = FALSE), 4)
+```
+
+This report examines whether three factors — school-choice reason (`reason`), number of past class failures (`failures`), and home address type (`address`) — have a significant effect on students' final grades ($G3$). The data comes from 649 students at two Portuguese secondary schools [@uci2014; @cortez2008]. Fifteen students who received a final grade of zero were removed from the analysis, as they likely did not sit the exam, leaving `r nrow(df_es_clean)` observations. Simple linear regression and hypothesis testing are used to analyse each factor separately.
+
+For `reason`, both simple linear regression and one-way ANOVA give $F(`r f_df1_es`, `r f_df2_es`) = `r f_val_es`$, $p = `r f_p_es`$, which shows that school-choice reason has a statistically significant effect on final grade. Students who chose their school because of its reputation scored on average `r b_es["reasonreputation"]` points higher than those who chose it for the course content (the reference group). However, `reason` alone only explains `r round(r2_es * 100, 1)`% of the variance in final grades ($R^2 = `r r2_es`$), which suggests that other factors also play an important role.
+
+For `failures`, simple linear regression reveals a strong, negative association with academic performance ($F(1, 632) = 111.8, p < 0.001$). On average, each additional past failure predicts a significant decrease of 1.801 points in the final grade. This factor explains 15.0% of the variance in $G3$ ($R^2 = 0.150$), indicating that academic history is a substantially stronger predictor of student performance than school-choice motivation. These results emphasize prior academic setbacks are a critical indicator for identifying students at risk of poor final outcomes.
+
+Similarly, for the `address` variable, simple linear regression and an independent two-sample Welch's t-test confirmed a statistically significant urban-rural achievement gap ($p < 0.05$). Students residing in urban areas scored, on average, 1.2 points higher in their final grades than their peers living in rural areas (mean $G3$: 12.3 vs. 11.1). However, consistent with the findings for school-choice reason, geographic location alone accounts for only a small fraction of the total variance in academic performance. This suggests that the observed disparity is likely driven by underlying socio-economic confounders associated with urban and rural demographics, rather than physical location alone.
+
+\newpage
+
+## 1. Data Background and Variables
+
+### 1.1 Dataset Introduction
+
+This project uses the Student Performance Dataset, collected by Paulo Cortez and Alice Silva from the University of Minho in Portugal [@cortez2008] and available on the UCI Machine Learning Repository [@uci2014]. The data come from two Portuguese secondary schools and were collected during the 2005–2006 school year through school records (for grades) and student questionnaires (for personal and social information).
+
+The dataset includes 649 student records from Portuguese language courses, with 33 variables covering family background, study habits, social life, and academic grades. The main variable of interest is the final grade (G3), scored from 0 to 20. This dataset is well suited for this project because it contains both quantitative and categorical variables, which allows us to apply linear regression and hypothesis testing. It also has no missing values. Understanding which factors affect student performance can help schools identify students who may need extra support [@oecd2012].
+
+### 1.2 Variable Descriptions
+
+Since there are 33 variables, we focus on the ones most relevant to our analysis. The variable we are most interested in is the final grade (G3), a quantitative variable scored from 0 to 20. There are also two other grade variables, G1 and G2, for the first and second period grades. We plan to use G3 as our response variable and focus on non-grade variables as predictors.
+
+For demographic information, the dataset includes age (quantitative, 15 to 22), sex (male or female), address type (urban or rural), school (GP or MS), family size (famsize, three or fewer vs. more than three), and whether parents live together (Pstatus). These are all categorical variables. Parents' education (Medu, Fedu) are ordinal variables from 0 (no education) to 4 (higher education), while parents' jobs (Mjob, Fjob) are nominal variables with five categories such as teacher, health, and services.
+
+For school-related variables, study time (studytime) is ordinal from 1 to 4, and past failures (failures) ranges from 0 to 4. There are also several yes/no variables like extra school support (schoolsup), family support (famsup), paid classes (paid), extracurricular activities (activities), desire for higher education (higher), and internet access (internet).
+
+For social and behavioral variables, family relationship quality (famrel), free time (freetime), going out (goout), workday alcohol use (Dalc), weekend alcohol use (Walc), and health status (health) are all ordinal and rated from 1 to 5. The number of absences (absences) is quantitative, ranging from 0 to 32, and romantic relationship status (romantic) is a yes/no variable.
+
+### 1.3 Research Context
+
+This dataset is suitable for the statistical methods covered in AMOD 5240H. The main response variable, final grade ($G3$), is a continuous variable ranging from 0 to 20, which makes it appropriate for linear regression. Some predictors, such as absences, age, and past failures, are quantitative, while others, such as the reason for choosing the school, address type, and sex, are categorical. These categorical variables can be used in group comparisons through dummy variables and hypothesis testing.
+
+The sample of 649 students is large enough for reliable regression results. Independence of observations is also a reasonable assumption, since each row represents a different student and one student's grade should not directly affect another's.
+
+This analysis focuses on three predictors: `reason` (why a student chose the school), `failures` (number of past class failures), and `address` (urban or rural home). The main research question is: **do these three factors have a statistically significant association with a student's final grade ($G3$)?**
+
+
+### 1.4 Data Quality Considerations
+
+The data file was checked before analysis to look for any structural problems.
+
+```{r}
+#| label: setup-data-check
+#| include: false
+df <- read.csv("student-por.csv")
+dim(df)
+str(df)
+```
+
+#### 1.4.1 Missing Values
+Preliminary checks show that there are no missing values (NA) in any column. All observations are complete.
+
+#### 1.4.2 Outliers and Unusual Values
+
+A closer look at the data shows a few unusual patterns. Most students have between 0 and 10 absences, but a small number have values close to 30, which suggests very poor attendance. For grades, 15 students have a final grade of $G3 = 0$. These are likely students who did not complete the course or missed the final exam, rather than students who genuinely scored zero. These cases will be removed before regression analysis. Most students are between 15 and 18 years old, but the oldest student is 22, which is possible if a student repeated a year or started school late.
+
+#### 1.4.3 Data Cleaning Requirements
+
+Before modelling, several data cleaning steps are applied. Binary variables such as `schoolsup`, `famsup`, and `paid` are converted to categorical factors. The `reason` variable is also converted to a factor with an appropriate reference level for regression. Some behavioural variables on ordinal scales, such as `studytime` and `famrel`, are treated as categorical or ordinal depending on the model. As noted in Section 1.4.2, the 15 students with $G3 = 0$ are removed from all regression models.
+
+The next section presents exploratory data analysis for the three main predictors — `reason`, `failures`, and `address` — before moving to formal modelling in Section 3.
+
+\newpage
+
+## 2. EDA and Analysis Proposal
+### 2.1 Brief Dataset Reminder
+
+This analysis uses the Student Performance Dataset from the UCI Machine Learning Repository [@uci2014], originally collected by Cortez and Silva [-@cortez2008]. The dataset contains 649 student records from two Portuguese secondary schools (Gabriel Pereira and Mousinho da Silveira), gathered during the 2005–2006 school year through school reports and student questionnaires. It includes 33 variables covering demographic background, family environment, school-related factors, and social behaviour. The response variable is the final grade ($G3$), scored on a 0–20 scale. There are no missing values in the dataset.
+
+The study specifically examines **failures, reason, and address** variables to capture three critical dimensions of student life: previous academic hurdles, personal enrollment motivation, and the potential socio-economic impact of urban versus rural living environments. By integrating these variables, the research aims to determine how historical performance and environmental contexts collectively shape academic success.
+
+### 2.2 Explorarory Data Analysis
+
+#### 2.2.1 The `reason` Variable
+
+```{r}
+#| label: load-reason-data
+#| message: false
+#| warning: false
+
+library(tidyverse)
+
+df_raw <- read.csv("student-por.csv")
+
+df_focus <- df_raw %>%
+  select(reason, G3)
+
+```
+
+
+```{r}
+#| label: tbl-reason-summary
+#| message: false
+#| warning: false
+
+summary_stats <- df_focus %>%
+  group_by(reason) %>%
+  summarise(
+    n = n(),
+    mean_G3 = mean(G3, na.rm = TRUE),
+    sd_G3 = sd(G3, na.rm = TRUE),
+    min_G3 = min(G3, na.rm = TRUE),
+    max_G3 = max(G3, na.rm = TRUE)
+  ) %>%
+  arrange(desc(mean_G3))
+
+kable(summary_stats,
+      digits = 2,
+      col.names = c("Reason", "n", "Mean G3", "SD G3", "Min G3", "Max G3"),
+      caption = "Summary statistics of G3 by school-choice reason,
+                 ordered by mean grade.")
+
+```
+
+The summary statistics show that average final grades differ depending on why students chose the school. Students who chose based on the school's reputation had the highest mean grade (12.9), while those in the "other" group had the lowest average (10.7). The course group is the largest ($n=285$), which is nearly four times the size of the other group ($n=72$). This suggests that choosing a school for its course content is the most common reason in this dataset.
+
+```{r}
+#| label: fig-reason-overview
+#| fig-cap: "Left: number of students per school-choice reason. Right: final grade (G3) distribution by school-choice reason."
+#| fig-width: 8
+#| fig-height: 4
+#| message: false
+#| warning: false
+
+p_bar <- ggplot(df_focus, aes(x = reason, fill = reason)) +
+  geom_bar(show.legend = FALSE) +
+  theme_minimal() +
+  labs(title = "Enrollment by Reason",
+       x = "Reason",
+       y = "Count of Students")
+
+p_box <- ggplot(df_focus, aes(x = reason, y = G3, fill = reason)) +
+  geom_boxplot(alpha = 0.7, show.legend = FALSE) +
+  theme_minimal() +
+  labs(title = "G3 by School-Choice Reason",
+       x = "Reason for Choosing School",
+       y = "Final Grade (G3)")
+
+grid.arrange(p_bar, p_box, ncol = 2)
+```
+
+The bar chart shows that "course" is by far the most common reason for choosing a school ($n=285$), nearly four times larger than the "other" group ($n=72$). The boxplot reveals that the "reputation" group has the highest median grade and the smallest spread, while the "other" group has the most variability (SD = 3.93). The differences in medians across groups suggest that school-choice reason may be a useful predictor of final grades. Whether these differences are statistically significant will be tested in Section 3 using simple linear regression and one-way ANOVA.
+
+```{r}
+#| label: fig-g3-hist
+#| fig-cap: "Distribution of final grades (G3). The isolated spike at zero represents 15 students who likely did not sit the exam."
+ggplot(df_focus, aes(x = G3)) +
+  geom_histogram(binwidth = 1, fill = "steelblue", color = "white") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Final Grade (G3)",
+    x = "Final Grade",
+    y = "Frequency"
+  )
+```
+
+The histogram shows that $G3$ grades follow a roughly bell-shaped distribution centred between 10 and 15. However, there is a noticeable spike at zero, representing 15 students who did not receive a grade.
+
+```{r}
+#| label: tbl-reason-zero
+zero_cases <- df_focus %>% filter(G3 == 0)
+
+zero_by_reason <- zero_cases %>%
+  group_by(reason) %>%
+  tally()
+
+kable(zero_by_reason,
+      col.names = c("Reason", "Count of G3 = 0"),
+      caption = paste("Zero-grade records by reason group (total n =",
+                      nrow(zero_cases), ")."))
+```
+
+These zero-grade cases were examined further. They are spread across all four reason groups, with five cases each in the course and other groups.
+
+\newpage
+
+#### 2.2.2 The `address` Variable
+
+```{r}
+#| label: tbl-address-summary
+#| message: false
+#| warning: false
+
+library(knitr)
+library(dplyr)
+library(ggplot2)
+
+df_address <- df_raw %>%
+  select(address, G3)
+
+summary_address <- df_address %>%
+  group_by(address) %>%
+  summarise(
+    n = n(),
+    mean_G3 = mean(G3, na.rm = TRUE),
+    sd_G3 = sd(G3, na.rm = TRUE),
+    min_G3 = min(G3, na.rm = TRUE),
+    max_G3 = max(G3, na.rm = TRUE)
+  ) %>%
+  arrange(desc(mean_G3))
+
+kable(summary_address, 
+      digits = 2, 
+      caption = "Table 3: Summary of G3 by Address")
+```
+
+The summary statistics reveal a clear difference in average academic performance based on a student's home address. Students residing in urban areas achieved a higher mean final score of 12.3, compared to the 11.1 average for those living in rural areas. The sample size for the urban demographic ($n=452$) is substantially larger than that of the rural demographic ($n=197$), indicating that the majority of the surveyed student population lives in city environments.
+
+```{r}
+#| label: fig-address-bar
+#| fig-cap: "Distribution of students by home address type."
+#| message: false
+#| warning: false
+ggplot(df_address, aes(x = address, fill = address)) +
+  geom_bar(show.legend = FALSE) +
+  theme_minimal() +
+  scale_fill_manual(values = c("U" = "steelblue", "R" = "darkorange")) +
+  labs(title = "Distribution of Students by Home Address",
+       x = "Address Type (U = Urban, R = Rural)",
+       y = "Count of Students"
+  )
+```
+
+The bar chart visually emphasizes this heavy concentration of urban residents. Despite this uneven geographic distribution, both categories contain a sufficient number of observations to ensure that our statistical comparisons and regression coefficients will be reliable.
+
+```{r}
+#| label: tbl-address-zero
+#| message: false
+#| warning: false
+zero_by_address <- df_address %>%
+  filter(G3 == 0) %>%
+  group_by(address) %>%
+  tally()
+
+kable(zero_by_address, 
+      caption = "Table 4: Count of Students with G3 = 0 by Address")
+```
+
+Following the previous discovery of 15 anomalous zero-grade records, we examined how these extreme values are distributed geographically. The data shows that these zero grades appear in both urban and rural groups, with 11 cases in urban areas and 4 in rural areas. This proportional distribution indicates that extreme academic failure is not isolated to a specific residential setting. Given that a score of zero is highly unusual for a final grade distribution that is otherwise centered around 10 to 15, these observations likely represent students who dropped out of the course, missed the final examinations, or were disqualified, rather than representing a true measure of their academic knowledge.
+
+```{r}
+#| label: fig-address-box
+#| fig-cap: "Final grade (G3) distribution by home address type."
+#| message: false
+#| warning: false
+ggplot(df_address, aes(x = address, y = G3, fill = address)) +
+  geom_boxplot(alpha = 0.7, show.legend = FALSE) +
+  theme_minimal() +
+  scale_fill_manual(values = c("U" = "steelblue", "R" = "darkorange")) +
+  labs(
+    title = "G3 Grade Distribution by Home Address",
+    x = "Home Address (U = Urban, R = Rural)",
+    y = "Final Grade (G3)"
+  )
+```
+
+The boxplot highlights the academic disparity between the two geographic groups. The urban cohort displays a higher median final grade and a more concentrated interquartile range, suggesting a consistently higher level of academic performance. In contrast, the rural group exhibits a lower median score. These distinct visual variations strongly support the inclusion of a student's address as a meaningful categorical predictor in our statistical modeling. Furthermore, because the address variable consists of exactly two independent groups, it serves as an ideal candidate for our required hypothesis testing.
+
+
+
+#### 2.2.3 The `failures` Variable
+```{r}
+#| label: tbl-failures-summary
+df <- read.csv("student-por.csv")
+
+df %>%
+  group_by(failures) %>%
+  summarise(
+    n=n(),
+    mean_G3 = round(mean(G3, na.rm=TRUE),3),
+    sd_G3 = round(sd(G3, na.rm=TRUE),3),
+    min_G3 = min(G3, na.rm=TRUE),
+    max_G3 = max(G3, na.rm=TRUE)
+  ) %>% 
+  kable(caption = "Summary Statistics of G3 by Failures")
+```
+Student with no past failures had a notably higher mean final grade ($12.51$) compared to those with one or more failures (mean range: $8.07 - 8.81$). While the first failure appears to be a major predictor of lower performance, the impact does not seem cumulative; the mean grades for students with one, two, and three failures remained relatively stable and comparable. However, it is important to note the substantial difference in sample sizes, as the vast majority of students ($n=549$) belong to the zero-failure group, which may suggest a more consistent performance trend compared to the smaller, more volatile failure subgroups.
+```{r}
+#| label: tbl-zero
+df %>%
+  filter(G3 == 0) %>%
+  group_by(failures) %>%
+  summarise(Count_Zero_Grades = n()) %>%
+  knitr::kable(
+    col.names = c("Past Failures", "Frequency of G3=0"),
+    caption = "Distribution of Zero Grades by Failure Category",
+    align = "c"
+  )
+```
+@tbl-zero shows that 9 out of 15 students who received a grade of zero belong to the failures subgroups ($n=1, 2, 3$). This concentration of zero grades potentially acts as a confounding factor that lowers the mean scores for these groups. In the upcoming analysis, these zero-value observations will be monitored closely to determine if they represent a trend in academic performance or isolated outliers.
+```{r}
+#| label: fig-failures-bar
+#| fig-cap: "Distribution of students by number of past academic failures."
+ggplot(df, aes(x=as.factor(failures), fill = as.factor(failures)))+
+  geom_bar(show.legend = FALSE)+
+  theme_minimal()+
+  labs(title="Distribution of Failures",
+       x="Number of Failures",
+       y="Count of Students")
+```
+The majority of students in the dataset have no prior failures. There is a noticeable decrease in student counts as the number of failures increases, reflecting a significant difference in sample sizes across categories
+
+```{r}
+#| label: fig-failures-box
+#| fig-cap: "Distribution of final grades (G3) across failure categories."
+ggplot(df, aes(x = as.factor(failures), y = G3, fill = as.factor(failures))) +
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 2) +
+  stat_summary(fun = mean, geom = "point",
+               shape = 23, size = 3, fill = "white") +
+  labs(
+    title = "Comparison of Final Grades (G3) by Number of Failures",
+    x = "Number of Past Failures",
+    y = "Final Grade (G3)",
+    fill = "Failures"
+  ) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set2") 
+```
+
+The boxplot reinforces the negative relationship between past failures and academic performance. Students with zero failures maintain a significantly higher median and mean grade compared to other groups. Interestingly, once a student has failed at least once, the distribution of grades (_interquartile range_) drops to a lower, similar level across 1, 2, and 3 failures. The presence of outliers with zero scores in all categories suggests that failure history is not the sole cause of poor performance. Conversely, high-achieving outliers in the failure groups indicate that some students can still excel despite previous academic setbacks.
+
+```{r}
+#| label: fig-density
+#| fig-cap: "Density Distribution of Final Grades by Failures"
+ggplot(df, aes(x = G3, fill = factor(failures))) +
+  geom_density(alpha = 0.4) +
+  labs(title = "Density Distribution of Final Grades by Failures",
+       x = "Final Grade (G3)",
+       y = "Density",
+       fill = "Past Failures") +
+  theme_minimal()
+```
+
+@fig-density displays the distribution of final grades (G3) across different levels of past failures. There is a clear shift in academic performance, with students who have no prior failures exhibiting higher grade distributions, while those with past failures are more concentrated at lower values.
+
+Despite this shift, there is substantial overlap between the distributions, indicating that some students with past failures still achieve relatively high grades. The zero-failure group also shows a wider spread and a longer right tail, suggesting greater variability and the presence of higher-achieving students.
+
+Notably, small peaks near a final grade of zero are observed across all groups. This likely reflects a concentration of students with very low or zero scores, possibly due to non-completion or failure, rather than typical academic performance.
+
+Overall, the distributions are slightly skewed and bounded, which is expected for grade data, and support the patterns observed in the subsequent regression and ANOVA analyses.
+```{r}
+#| label: fig-failures-scatter
+#| fig-cap: "Correlation between past failures and final grades."
+#| message: false
+ggplot(df, aes(x=failures, y=G3))+
+  geom_point(alpha=0.3, color="steelblue")+
+  geom_smooth(method = "lm", color="red", se=TRUE)+
+  theme_minimal()+
+  labs(title = "Failures vs G3",
+       x="Number of Failures",
+       y="Final Grade (G3)"
+  )
+```
+The scatter plot reveals a clear negative trend between past failures and final grades, as indicated by the downward-sloping regression line. While students with zero failures show the highest potential scores, the overall distribution shifts lower as failures increase. Notably, outliers with zero scores exist across all failure levels, suggesting other critical factors impacting student performance beyond past academic history.
+
+
+### 2.3 Research Question
+
+This study investigates how academic history, school selection motivation, and living environment collectively influence student performance ($G3$). Specifically, we aim to determine whether the number of past failures, the reason for school choice, and the student's home address (urban vs. rural) have statistically significant effects on final grades, or if the observed differences in the EDA—such as the urban-rural achievement gap ($12.3$ vs $11.1$)—are merely due to sampling variation.
+
+To address these questions, we employ three primary statistical approaches:
+
+1. **Linear Regression**: To quantify the predictive power of past failures and specific school-choice categories on $G3$, evaluating the direction and magnitude of these associations.
+
+2. **One-Way ANOVA**: To formally test for significant differences in mean final grades across the four school-choice groups ($H_0: \mu_{\text{course}} = \mu_{\text{home}} = \mu_{\text{other}} = \mu_{\text{reputation}}$).
+
+3. **Independent Two-Sample Welch’s t-test**: To evaluate whether the difference in mean grades between urban and rural students is statistically significant ($H_0: \mu_{\text{Urban}} = \mu_{\text{Rural}}$).These methods are appropriate as they allow us to analyze the relationship between a continuous response variable ($G3$) and various discrete numerical and categorical predictors, providing a robust statistical basis for our exploratory findings.
+
+### 2.4 Proposed Analysis Plan
+
+We will model the final grade ($G3$) as the response variable and the student's reason for choosing the school (`reason`) as the predictor. Since `reason` is a nominal variable with four categories, it will first be converted to a factor in R, with *course* — the largest group ($n=285$) — serving as the reference level. R will automatically generate three dummy variables representing *home*, *other*, and *reputation*, yielding the following simple linear regression model:
+
+$$G3 = \beta_0 + \beta_1 \cdot \text{home} + \beta_2 \cdot \text{other} + \beta_3 \cdot \text{reputation} + \varepsilon$$
+
+We will use the overall $F$-test to assess whether `reason` as a whole explains a statistically significant amount of variation in $G3$, and individual $t$-tests on each coefficient to identify which specific categories differ from the reference level. Alongside the regression, we will conduct a one-way ANOVA as an independent hypothesis test comparing mean $G3$ across the four groups. If `reason` is found to be significant, we will consider extending the model to include additional predictors such as `failures` or `studytime`, in order to assess whether the effect of school-choice motivation persists after controlling for potential confounders.
+
+The analysis will utilize G3 (final grade) as the continuous response variable ($Y$), with the number of past failures serving as the primary predictor variable ($X$). A simple linear regression model will be fitted to evaluate the relationship between these two variables. To ensure the robustness of the findings, an overall model F-test and t-tests on the regression coefficients will be conducted. Additionally, an ANOVA test will be performed to compare the mean scores across the different levels of failures, providing a comprehensive view of how academic history impacts current performance.
+
+### 2.5 Potential Challenges
+
+Before proceeding with the formal hypothesis testing, several characteristics of the dataset were identified that require careful interpretation:
+
+**Sample Size Imbalance**: There is a substantial disparity in group sizes across both primary variables. For school-choice reasons, the 'course' group ($n=285$) is nearly four times larger than the 'other' group ($n=72$). Similarly, the 'zero-failure' group significantly outweighs the higher-failure categories. These imbalances may reduce statistical power, increase sensitivity to outliers, and potentially affect the assumption of homogeneity of variance (homoscedasticity).
+
+**The "Zero-Grade" Phenomenon**: Fifteen students recorded a final grade ($G3$) of $0$ across all categories. These likely represent exam absences rather than actual academic ability. Since these values can disproportionately pull down group means and skew regression estimates, their influence will be closely monitored during the diagnostic phase.
+
+**Potential Confounding Factors**: The observed differences in $G3$ may not stem solely from school-choice motivation or past failures. External factors, such as parental education or study habits, could act as confounding variables. Consequently, results from simple linear models should be interpreted with caution, justifying the need for a more robust multiple regression approach later in the study.
+
+## 3. Modelling and Analysis
+
+### 3.1 Methodology
+
+The statistical framework for this study focuses on identifying the primary drivers of final academic performance (**G3**) by analyzing three key variables: past academic failures, residential address, and the reason for school selection. The response variable ($Y$) is the final grade (**G3**), which is treated as a continuous numerical value. The predictor variables ($X$) include **failures**, handled as both a discrete numeric and categorical factor, alongside the categorical predictors of **address** (binary) and **reason** (nominal).
+
+To establish the statistical significance of these predictors, the study first employs group comparison through hypothesis testing. A **One-Way ANOVA** is conducted for both **failures** and **reason** to determine if the mean differences in grades across their multiple subgroups are statistically significant ($p < 0.05$). For the **address** variable, an **Independent T-Test** is utilized to compare the performance gap specifically between Urban and Rural students. These tests ensure that any observed trends in the exploratory phase are not due to random chance before proceeding to predictive modeling.
+
+The core of the analysis involves fitting **Simple Linear Regression** models for each individual variable ($G3 = \beta_0 + \beta_1 X + \epsilon$). This step isolates the "raw" effect of a single factor, allowing each analyst to quantify the specific point drop associated with an additional failure or the grade premium linked to a school's reputation. Following the individual analyses, a **Multiple Linear Regression** model is integrated to combine all significant predictors. This final stage determines which factors remain influential when controlled for one another, identifying the most robust drivers of success while accounting for confounding effects between a student's past performance and their environment.
+
+Finally, the validity of these regression models is verified through a rigorous check of statistical assumptions and diagnostics. This includes assessing the linearity of relationships, the normality of error terms, and homoscedasticity (constant variance of residuals). Special attention is also given to the influence of the 15 zero-grade outliers identified during the exploratory data analysis, ensuring that these extreme values do not disproportionately bias the regression slopes or lead to misleading conclusions about the overall student population.
+
+#### Linear Regression Assumptions
+
+All three simple linear regression models in this study rely on four standard assumptions:
+
+1. **Linearity**: The mean of $G3$ is a linear function of the predictor. For categorical predictors (`reason` and `address`), this is automatically satisfied — the model estimates a separate mean for each group. For `failures` treated as numeric, a linear relationship is assumed.
+
+2. **Independence**: Each student is a separate observation, and one student's grade should not affect another's. Because the data comes from a cross-sectional survey, this condition is reasonable.
+
+3. **Normality**: The residuals are assumed to follow a normal distribution. This is checked using Normal Q-Q plots for each model.
+
+4. **Homoscedasticity**: The residuals should have constant variance across all fitted values. This is assessed using Residuals vs Fitted and Scale-Location plots.
+
+These conditions are verified for each model in the corresponding diagnostic subsections (Sections 3.2.1, 3.3, and 3.4.2).
+
+### 3.2 Analysis Results: School Selection Reason
+
+#### 3.2.1 Simple Linear Regression: G3 ~ `reason`
+
+```{r}
+#| label: setup-reason-model
+#| message: false
+#| warning: false
+
+df_model <- read.csv("student-por.csv")
+
+# Convert reason to a factor with "course" as the reference level
+df_model$reason <- relevel(factor(df_model$reason), ref = "course")
+
+reason_levels <- data.frame(
+  `Reason Levels` = levels(df_model$reason)
+)
+
+kable(reason_levels, caption = "Table: Factor Levels for 'reason'")
+```
+
+##### Handling G3 = 0 Cases
+
+As noted in the EDA, 15 students have a final grade of $G3 = 0$. These are likely not true academic scores. Instead, they probably represent students who dropped out, missed the final exam, or were disqualified. Three pieces of evidence support this:
+
+1. The $G3$ distribution is roughly bell-shaped and centred between 10 and 15. The zero values form a separate spike that is disconnected from the main distribution.
+2. Nine of the 15 zero-grade students also have one or more past failures. Keeping them would lower the mean grades for these already small groups and make the regression results less reliable.
+3. The zero cases appear across all groups for every predictor (`reason`, `failures`, `address`), so they do not seem to be linked to any one group in particular.
+
+For these reasons, the 15 observations with $G3 = 0$ are **excluded** from all models. This removes 2.3% of the data and gives a cleaner dataset that better reflects real student performance.
+
+```{r}
+#| label: setup-clean-data
+#| message: false
+#| warning: false
+
+# Exclude G3 = 0 cases
+df_clean <- df_model %>%
+  filter(G3 > 0)
+
+cleaning_summary <- data.frame(
+  `Step` = c("Original n", "After removing G3 = 0", "Cases removed"),
+  `Count` = c(nrow(df_model), nrow(df_clean), nrow(df_model) - nrow(df_clean))
+)
+
+kable(cleaning_summary, caption = "Table: Data Cleaning Summary")
+```
+
+##### Model Fitting
+
+With `reason` set as a factor (reference level = `"course"`) and the 15 zero-grade records removed, we fit the following simple linear regression model:
+
+$$G3 = \beta_0 + \beta_1 \cdot \text{home} + \beta_2 \cdot \text{other} + \beta_3 \cdot \text{reputation} + \varepsilon$$
+
+```{r}
+#| label: fit-reason-slr
+#| message: false
+#| warning: false
+
+# Fit SLR: G3 ~ reason
+model_reason <- lm(G3 ~ reason, data = df_clean)
+model_reason %>%
+  tidy(conf.int = TRUE) %>%
+  kable(digits = 3, 
+        caption = "Linear Regression Results: G3 predicted by reason")
+```
+
+```{r}
+#| label: reason-confint
+#| message: false
+#| warning: false
+
+# 95% confidence intervals for all coefficients
+ci_matrix <- confint(model_reason)
+kable(as.data.frame(ci_matrix), 
+      digits = 3, 
+      caption = "Table: 95% Confidence Intervals for G3 ~ reason")
+```
+
+The intercept $\hat{\beta}_0$ gives the estimated mean G3 for the `course` group (the reference level). Each slope coefficient shows the difference in mean G3 between that group and the `course` group.
+
+##### Results and Interpretation
+
+```{r}
+#| label: reason-stats
+#| message: false
+#| warning: false
+
+# Extract key statistics for inline reporting
+b      <- round(coef(model_reason), 3)
+s      <- summary(model_reason)
+fstat  <- s$fstatistic
+f_val  <- round(fstat["value"], 2)
+f_df1  <- fstat["numdf"]
+f_df2  <- fstat["dendf"]
+f_p    <- round(pf(fstat["value"],
+                   fstat["numdf"],
+                   fstat["dendf"],
+                   lower.tail = FALSE), 4)
+r2     <- round(s$r.squared, 4)
+coef_s <- s$coefficients
+ci     <- confint(model_reason)
+```
+
+**Model equation.** Substituting the estimated coefficients gives:
+
+$$\widehat{G3} = `r b["(Intercept)"]` + `r b["reasonhome"]`\cdot\text{home} + `r b["reasonother"]`\cdot\text{other} + `r b["reasonreputation"]`\cdot\text{reputation}$$
+
+where `home`, `other`, and `reputation` are indicator variables equal to 1 if the student belongs to that group and 0 otherwise.
+
+**Overall $F$-test.** The null hypothesis $H_0: \beta_1 = \beta_2 = \beta_3 = 0$ states that school-choice reason has no effect on final grade. The $F$-test gives $F(`r f_df1`, `r f_df2`) = `r f_val`$, $p = `r f_p`$. Since $p < 0.05$, we reject $H_0$ and conclude that `reason` is a statistically significant predictor of $G3$. The $R^2 = `r r2`$, meaning school-choice reason explains about `r round(r2 * 100, 1)`% of the variance in final grades.
+
+**Individual $t$-tests.** @tbl-reason-coef shows the estimated coefficients, standard errors, $t$-statistics, $p$-values, and 95% confidence intervals.
+
+```{r}
+#| label: tbl-reason-coef
+#| message: false
+#| warning: false
+
+coef_table <- data.frame(
+  Group        = c("Intercept (course)", "home", "other", "reputation"),
+  Estimate     = round(coef_s[, "Estimate"],   3),
+  `Std. Error` = round(coef_s[, "Std. Error"], 3),
+  `t value`    = round(coef_s[, "t value"],    3),
+  `p-value`    = round(coef_s[, "Pr(>|t|)"],  4),
+  `CI 2.5%`    = round(ci[, 1], 3),
+  `CI 97.5%`   = round(ci[, 2], 3),
+  check.names  = FALSE
+)
+
+kable(coef_table,
+      caption = "Coefficient estimates and 95% CIs for G3 ~ reason",
+      row.names = FALSE)
+```
+
+The intercept $\hat{\beta}_0 = `r b["(Intercept)"]`$ is the estimated mean $G3$ for course-motivated students. Each slope shows the average grade difference between that group and the course group:
+
+- **home** ($\hat{\beta}_1 = `r b["reasonhome"]`$, $p = `r round(coef_s["reasonhome", "Pr(>|t|)"], 4)`$, 95% CI: $[`r round(ci["reasonhome", 1], 3)`,\ `r round(ci["reasonhome", 2], 3)`]$): students who chose the school because it was close to home scored `r abs(b["reasonhome"])` points `r ifelse(b["reasonhome"] < 0, "lower", "higher")` than the course group on average.
+- **other** ($\hat{\beta}_2 = `r b["reasonother"]`$, $p = `r round(coef_s["reasonother", "Pr(>|t|)"], 4)`$, 95% CI: $[`r round(ci["reasonother", 1], 3)`,\ `r round(ci["reasonother", 2], 3)`]$): students who gave other reasons scored `r abs(b["reasonother"])` points `r ifelse(b["reasonother"] < 0, "lower", "higher")` on average.
+- **reputation** ($\hat{\beta}_3 = `r b["reasonreputation"]`$, $p = `r round(coef_s["reasonreputation", "Pr(>|t|)"], 4)`$, 95% CI: $[`r round(ci["reasonreputation", 1], 3)`,\ `r round(ci["reasonreputation", 2], 3)`]$): students who chose the school for its reputation scored `r abs(b["reasonreputation"])` points `r ifelse(b["reasonreputation"] > 0, "higher", "lower")` on average — the largest difference among the three groups.
+
+A 95% confidence interval that does not include zero means the difference from the course group is statistically significant at the 5% level. If the interval includes zero, the difference may simply be due to chance.
+
+##### Assumptions
+
+Simple linear regression requires four conditions: **linearity**, **independence**, **normality** of residuals, and **homoscedasticity** (equal variance). Since the predictor is categorical, the concept of linearity is not directly applicable — the model simply estimates a mean for each group. Independence is reasonable here because each student is a separate observation and one student's grade should not affect another's. The remaining two conditions — normality and equal variance — are checked using the diagnostic plots below.
+
+##### Diagnostic Plots
+
+To assess whether the normality and homoscedasticity assumptions are satisfied, we examine three standard diagnostic plots for `model_reason`.
+
+```{r}
+#| label: reason-diag-data
+#| message: false
+#| warning: false
+
+diag_df <- data.frame(
+  fitted       = fitted(model_reason),
+  residuals    = residuals(model_reason),
+  std_resid    = rstandard(model_reason)
+)
+```
+
+```{r}
+#| label: fig-resid-fitted
+#| fig-cap: "Residuals vs Fitted values for G3 ~ reason. Because the predictor is categorical with four levels, fitted values cluster at four distinct points (the four group means)."
+#| message: false
+#| warning: false
+
+ggplot(diag_df, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  geom_smooth(method = "lm", se = FALSE, color = "steelblue", linewidth = 0.8) +
+  theme_minimal() +
+  labs(title = "Residuals vs Fitted",
+       x = "Fitted Values (Group Means)",
+       y = "Residuals")
+```
+
+```{r}
+#| label: fig-scale-location
+#| fig-cap: "Scale-Location plot for G3 ~ reason. A roughly horizontal smoother indicates constant variance across groups."
+#| message: false
+#| warning: false
+
+ggplot(diag_df, aes(x = fitted, y = sqrt(abs(std_resid)))) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(se = FALSE, color = "steelblue", linewidth = 0.8) +
+  theme_minimal() +
+  labs(title = "Scale-Location",
+       x = "Fitted Values (Group Means)",
+       y = expression(sqrt("|Standardized Residuals|")))
+```
+
+```{r}
+#| label: fig-slr-qq
+#| fig-cap: "Normal Q-Q plot of standardized residuals for G3 ~ reason."
+#| message: false
+#| warning: false
+
+ggplot(diag_df, aes(sample = std_resid)) +
+  stat_qq(alpha = 0.4) +
+  stat_qq_line(color = "red") +
+  theme_minimal() +
+  labs(title = "Normal Q-Q Plot",
+       x = "Theoretical Quantiles",
+       y = "Standardized Residuals")
+```
+
+Because `reason` is a categorical predictor, the fitted values in @fig-resid-fitted and @fig-scale-location fall at four distinct points — one for each group mean. The residuals at each point should be centred near zero and have similar spread, which would confirm homoscedasticity. The Q-Q plot in @fig-slr-qq checks normality. Points that follow the diagonal line show that residuals are roughly normally distributed. Some deviation in the tails is expected and acceptable given the sample size ($n = `r nrow(df_clean)`$).
+
+#### 3.2.2 One-way ANOVA: G3 by `reason`
+
+As proposed in Section 2.3, a one-way ANOVA is used to test whether mean final grades differ across the four school-choice groups. The hypotheses are:
+
+$$H_0: \mu_{\text{course}} = \mu_{\text{home}} = \mu_{\text{other}} = \mu_{\text{reputation}}$$
+$$H_1: \text{at least one group mean differs}$$
+
+This adds to the SLR in Section 3.2.1: while the regression shows how each group differs from the reference level, the ANOVA tests whether any group difference exists at all.
+
+##### Assumptions
+
+Before looking at the ANOVA results, we check two key assumptions: normality of residuals and equal variance across groups.
+
+```{r}
+#| label: fig-anova-qq
+#| fig-cap: "Normal Q-Q plot of ANOVA residuals for G3 ~ reason."
+#| message: false
+#| warning: false
+
+anova_reason <- aov(G3 ~ reason, data = df_clean)
+
+qqnorm(residuals(anova_reason), main = "Normal Q-Q Plot of Residuals")
+qqline(residuals(anova_reason), col = "red", lwd = 1.5)
+```
+
+@fig-anova-qq shows that the residuals follow the normal line fairly well in the middle, with some deviation in the tails. This is common with bounded grade data. Since $n = `r nrow(df_clean)`$ is a large sample, the Central Limit Theorem means the $F$-test is still reliable despite these small deviations.
+
+```{r}
+#| label: reason-levene
+#| message: false
+#| warning: false
+
+library(car)
+lev_result <- leveneTest(G3 ~ reason, data = df_clean)
+lev_F <- round(lev_result[1, "F value"], 3)
+lev_p <- round(lev_result[1, "Pr(>F)"], 4)
+```
+
+Levene's test gives $F = `r lev_F`$, $p = `r lev_p`$. Since $p > 0.05$, we do not reject the null hypothesis of equal variances, so the homogeneity assumption is met.
+
+##### ANOVA Results
+
+```{r}
+#| label: reason-anova-results
+#| message: false
+#| warning: false
+
+anova_reason <- aov(G3 ~ reason, data = df_clean)
+anova_reason %>%
+  tidy() %>%
+  kable(digits = 3, caption = "ANOVA Results: G3 by reason")
+```
+
+```{r}
+#| label: reason-anova-stats
+#| message: false
+#| warning: false
+
+anova_tbl <- summary(anova_reason)[[1]]
+anova_F   <- round(anova_tbl["reason",    "F value"], 2)
+anova_df1 <- anova_tbl["reason",    "Df"]
+anova_df2 <- anova_tbl["Residuals", "Df"]
+anova_p   <- round(anova_tbl["reason",    "Pr(>F)"], 4)
+```
+
+The one-way ANOVA gives $F(`r anova_df1`, `r anova_df2`) = `r anova_F`$, $p = `r anova_p`$. Since $p < 0.05$, we reject $H_0$ and conclude that at least one group has a significantly different mean $G3$. This matches the $F$-test result from Section 3.2.1, which is expected since the two tests are mathematically the same when there is a single categorical predictor.
+
+##### Post-hoc Analysis (Tukey HSD)
+
+Since the ANOVA is significant, we use Tukey's Honest Significant Difference (HSD) test to find out which specific group pairs are different from each other.
+
+```{r}
+#| label: reason-tukey-raw
+#| message: false
+#| warning: false
+
+tukey_result <- TukeyHSD(anova_reason)
+tukey_result %>%
+  tidy() %>%
+  kable(digits = 3, caption = "Tukey HSD Pairwise Comparisons")
+```
+
+```{r}
+#| label: fig-tukey
+#| fig-cap: "Tukey HSD 95% family-wise confidence intervals for pairwise differences in mean G3 by reason. Intervals that do not cross zero indicate statistically significant differences."
+#| message: false
+#| warning: false
+
+tukey_df <- as.data.frame(tukey_result$reason)
+tukey_df$comparison <- rownames(tukey_df)
+
+ggplot(tukey_df, aes(x = comparison, y = diff, ymin = lwr, ymax = upr)) +
+  geom_pointrange() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    title = "Tukey HSD: Pairwise Mean G3 Differences by Reason",
+    x = "Comparison",
+    y = "Difference in Mean G3 (95% Family-wise CI)"
+  )
+```
+
+@fig-tukey shows the 95% confidence intervals for all six pairwise comparisons. An interval that does not cross the zero line means the difference between those two groups is statistically significant after adjusting for multiple comparisons. Comparisons involving the `reputation` group show the largest differences, which matches the regression finding that reputation-motivated students had the highest mean grade.
+
+### 3.3 Analysis Results: Residential Address
+
+#### 3.3.1 Simple Linear Regression: G3 ~ `address`
+
+To evaluate the impact of a student's living environment on their academic performance, we fit a simple linear regression model using `address` as the sole predictor. The `address` variable is a categorical factor with two levels: "R" (Rural) and "U" (Urban). R automatically sets the alphabetically first level, "R", as the reference baseline.
+
+The model equation is:
+
+$$G3 = \beta_0 + \beta_1 \cdot \text{U} + \varepsilon$$
+
+```{r}
+#| label: fit-address-slr
+#| message: false
+#| warning: false
+
+# Fit SLR: G3 ~ address using the dataset without G3 = 0
+model_address <- lm(G3 ~ address, data = df_clean)
+model_address %>%
+  tidy(conf.int = TRUE) %>%
+  kable(digits = 3, caption = "Linear Regression Results: G3 predicted by address")
+```
+
+
+```{r}
+#| label: address-confint
+#| message: false
+#| warning: false
+
+# 95% confidence intervals for the coefficients
+ci_address <- confint(model_address)
+
+kable(as.data.frame(ci_address), 
+      digits = 3, 
+      caption = "Table: 95% Confidence Intervals for G3 ~ address")
+```
+
+##### Results and Interpretation
+```{r}
+#| label: address-stats
+#| message: false
+#| warning: false
+
+# Extract key statistics for inline reporting
+b_addr      <- round(coef(model_address), 3)
+s_addr      <- summary(model_address)
+fstat_addr  <- s_addr$fstatistic
+f_val_addr  <- round(fstat_addr["value"], 2)
+f_df1_addr  <- fstat_addr["numdf"]
+f_df2_addr  <- fstat_addr["dendf"]
+f_p_addr    <- round(pf(fstat_addr["value"],
+                        fstat_addr["numdf"],
+                        fstat_addr["dendf"],
+                        lower.tail = FALSE), 4)
+r2_addr     <- round(s_addr$r.squared, 4)
+```
+
+**Model equation**. Substituting the estimated coefficients gives:
+
+$$\widehat{G3} = `r b_addr["(Intercept)"]` + `r b_addr["addressU"]` \cdot \text{U}$$
+
+where $\text{U}$ is an indicator variable equal to 1 if the student lives in an urban area, and 0 if rural.
+
+**Overall $F$-test**. The null hypothesis $H_0: \beta_1 = 0$ states that home address has no effect on the final grade. The overall $F$-test yields $F(`r f_df1_addr`, `r f_df2_addr`) = `r f_val_addr`$, $p = `r f_p_addr`$. Assuming the typical alpha level of 0.05, we reject $H_0$ and conclude that `address` is a statistically significant predictor of $G3$. However, the $R^2 = `r r2_addr`$ indicates that only a very small portion (approximately `r round(r2_addr * 100, 1)`%) of the variance in final grades is explained by the urban/rural distinction alone.
+
+**Coefficient Interpretation**. The intercept $\hat{\beta}_0 = `r b_addr["(Intercept)"]`$ represents the estimated mean $G3$ for students living in rural areas (the reference group). The slope $\hat{\beta}_1 = `r b_addr["addressU"]`$ indicates that urban students score, on average, `r b_addr["addressU"]` points higher than their rural counterparts.
+
+
+#### 3.3.2 Two-Sample T-Test: G3 by address
+
+While an ANOVA is used for the four-level `reason` variable, `address` consists of exactly two independent groups (Urban and Rural). Therefore, an independent two-sample $t$-test is the most appropriate method to test for a significant difference in mean grades.
+
+The hypotheses are:
+
+$$H_0: \mu_{\text{Urban}} - \mu_{\text{Rural}} = 0$$
+$$H_1: \mu_{\text{Urban}} - \mu_{\text{Rural}} \neq 0$$
+
+```{r}
+#| label: address-ttest
+#| message: false
+#| warning: false
+
+# Welch's two-sample t-test (default in R, accounts for unequal variances)
+t_test_address <- t.test(G3 ~ address, data = df_clean)
+t_test_address %>%
+  tidy() %>%
+  select(statistic, parameter, p.value, conf.low, conf.high) %>% 
+  kable(digits = 3, 
+        col.names = c("t-value", "df", "p-value", "CI Lower", "CI Upper"),
+        caption = "Table: Welch's Two-Sample t-test Results (G3 by address)")
+```
+
+The Welch two-sample $t$-test results in $t = `r round(t_test_address$statistic, 3)`$ with a p-value of $`r round(t_test_address$p.value, 4)`$. Since $p < 0.05$, we reject the null hypothesis. This confirms our visual findings from the EDA phase: there is a statistically significant difference in true mean final grades between urban and rural students.
+
+### 3.4 Analysis Results: Past Failures
+
+#### 3.4.1 Simple Linear Regression: G3 ~ `failures`
+
+```{r}
+#| label: fit-failures-slr
+# Simple linear regression: G3 ~ failures
+model_failures <- lm(G3 ~ failures, data = df_clean)
+
+# Summary objects
+s_fail <- summary(model_failures)
+coef_fail <- s_fail$coefficients
+ci_fail <- confint(model_failures)
+
+# Coefficient table
+coef_table_failures <- data.frame(
+  Term = rownames(coef_fail),
+  Estimate = round(coef_fail[, "Estimate"], 3),
+  `Std. Error` = round(coef_fail[, "Std. Error"], 3),
+  `t value` = round(coef_fail[, "t value"], 3),
+  `p-value` = round(coef_fail[, "Pr(>|t|)"], 4),
+  `CI 2.5%` = round(ci_fail[, 1], 3),
+  `CI 97.5%` = round(ci_fail[, 2], 3),
+  check.names = FALSE
+)
+kable(
+  coef_table_failures,
+  caption = "Regression coefficients for the model predicting 
+            final grade (G3) from past failures",
+  row.names = FALSE
+)
+```
+The analysis of academic history demonstrates a clear negative association between previous failures and final grade (G3). A simple linear regression model estimates a slope coefficient ($\beta_1$) of $-1.801$ for the failures variable, with a corresponding p-value of $< 0.001$. The resulting model equation is expressed as:
+$$
+\widehat{G3} = 12.563 - 1.801\cdot \text{failures}
+$$
+Intercept ($\beta_0 = 12.563$) represents the predicted final grade for a student with no prior failures and serves as a baseline reference. Slope ($\beta_1 = -1.801$) indicates a negative relationship between past failures and final grade, such that each additional failure is associated with an average decrease of approximately 1.80 points in final grade.
+
+The 95% confidence interval for the slope does not include zero, further confirming that the relationship between past failures and final grade is statistically significant.The model explains approximately 15.0% of the variation in final grade $R^2= $, suggesting that while past failures are an important predictor, other factors also contribute to student performance.
+```{r}
+#| label: failures-fstat
+fstat <- s_fail$fstatistic
+df1 <- fstat["numdf"]   # numerator df
+df2 <- fstat["dendf"]   # denominator df
+```
+```{r}
+#| label: tbl-modelfit
+model_fit_table <- data.frame(
+  Metric = c("R-squared", "Adjusted R-squared", "F-statistic", 
+             "df1", "df2", "p-value"),
+  Value = c(
+    round(s_fail$r.squared, 3),
+    round(s_fail$adj.r.squared, 3),
+    round(fstat["value"], 1),
+    df1,
+    df2,
+    "< 0.001"
+  )
+)
+kable(
+  model_fit_table,
+  caption = "Model fit statistics for the regression of G3 on failures"
+)
+```
+@tbl-modelfit summarizes the overall fit of the regression model. The model explains approximately 15.0% of the variation in final grade $(R^2 = 0.150)$. The model is statistically significant $(F(1,632) = 111.8, \quad p < 0.001$, indicating that the predictor variable _failures_ provides meaningful information in explaining student performance. 
+
+#### 3.4.2 Diagnostic Plots
+
+```{r, warning=FALSE, message=FALSE}
+#| label: fig-diagnostics-failures
+#| fig-cap: "Diagnostic plots for the regression model predicting G3 from failures"
+#| fig-width: 8
+#| fig-height: 6
+
+diag_failures <- data.frame(
+  fitted    = fitted(model_failures),
+  residuals = residuals(model_failures),
+  std_resid = rstandard(model_failures),
+  leverage  = hatvalues(model_failures)
+)
+
+# 1. Residuals vs Fitted
+p1 <- ggplot(diag_failures, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  geom_smooth(method = "lm", se = FALSE, color = "steelblue", linewidth = 0.8)+
+  theme_minimal() +
+  labs(title = "Residuals vs Fitted", x = "Fitted Values", y = "Residuals")
+
+# 2. Q-Q plot
+p2 <- ggplot(diag_failures, aes(sample = std_resid)) +
+  stat_qq(alpha = 0.3) +
+  stat_qq_line(color = "red", linewidth = 0.8) +
+  theme_minimal() +
+  labs(title = "Q-Q Residuals", x = "Theoretical Quantiles", 
+       y = "Standardized Residuals")
+
+# 3. Scale-Location
+p3 <- ggplot(diag_failures, aes(x = fitted, y = sqrt(abs(std_resid)))) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = FALSE, color = "steelblue", linewidth = 0.8)+
+  theme_minimal() +
+  labs(title = "Scale-Location", x = "Fitted Values",
+       y = expression(sqrt("|Standardized residuals|")))
+
+# 4. Residuals vs Leverage
+p4 <- ggplot(diag_failures, aes(x = leverage, y = std_resid)) +
+  geom_point(alpha = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  geom_smooth(method = "lm", se = FALSE, color = "steelblue", linewidth = 0.8)+
+  theme_minimal() +
+  labs(title = "Residuals vs Leverage", x = "Leverage", 
+       y = "Standardized Residuals")
+grid.arrange(p1, p2, p3, p4, ncol = 2)
+```
+Diagnostic plots were examined to assess the assumptions of the linear regression model. The **Residuals versus Fitted** plot shows no clear systematic pattern, although clustering is observed due to the discrete nature of the predictor variable (failures). The **Q-Q plot** indicates that the residuals are approximately normally distributed, with only minor deviations at the extremes. The **Scale-Location** plot suggests a slight increase in variance with fitted values, though this does not appear to be severe. Finally, the **Residuals versus Leverage** plot does not reveal any highly influential observations. Overall, the assumptions of linear regression appear to be reasonably satisfied.
+
+\newpage
+
+#### 3.4.3 One-way ANOVA Results
+
+```{r}
+#| label: tbl-anova-fail
+
+anova_failures <- aov(G3 ~ factor(failures), data = df_clean)
+anova_tbl <- tidy(anova_failures)
+
+anova_tbl$term <- c("Failures", "Residuals")
+anova_tbl$sumsq <- round(anova_tbl$sumsq, 2)
+anova_tbl$meansq <- round(anova_tbl$meansq, 2)
+anova_tbl$statistic <- round(anova_tbl$statistic, 2)
+colnames(anova_tbl) <- c("Source", "Df", "Sum Sq", 
+                         "Mean Sq", "F value", "p-value")
+kable(
+  anova_tbl,
+  caption = "One-way ANOVA results for final grade (G3) 
+            across levels of past failures",
+  align = "c"
+)
+```
+@tbl-anova-fail presents the results of a one-way ANOVA comparing mean final grades across the four levels of past failures. The analysis shows a statistically significant difference between groups $F(3,630) = 45.13,\quad p < 0.001$, indicating that academic performance varies significantly depending on the number of previous failures. The relatively large F-statistic suggests that the variation in final grades between failure groups is substantially greater than the variation within groups. These findings are consistent with the regression results, which also demonstrated a strong negative relationship between past failures and final grade.
+
+#### 3.4.4 Turkey HSD
+
+```{r}
+#| label: tbl-turkey-fail
+tukey_failures <- TukeyHSD(anova_failures)
+tukey_tbl <- tidy(tukey_failures)
+
+tukey_tbl$estimate <- round(tukey_tbl$estimate, 2)
+tukey_tbl$conf.low <- round(tukey_tbl$conf.low, 2)
+tukey_tbl$conf.high <- round(tukey_tbl$conf.high, 2)
+tukey_tbl$adj.p.value <- signif(tukey_tbl$adj.p.value, 3)
+
+tukey_tbl <- tukey_tbl[, c("contrast", "estimate", 
+                           "conf.low", "conf.high", "adj.p.value")]
+colnames(tukey_tbl) <- c(
+  "Comparison",
+  "Difference",
+  "CI Lower",
+  "CI Upper",
+  "Adjusted p-value"
+)
+kable(
+  tukey_tbl,
+  caption = "Tukey HSD post-hoc comparisons for mean final grade (G3)",
+  align = "c"
+)
+```
+@tbl-turkey-fail presents the results of Tukey’s HSD post-hoc comparisons for mean final grade across levels of past failures. The results indicate that students with no past failures have significantly higher final grades compared to those with one or more failures, as the corresponding confidence intervals do not include zero and the adjusted p-values are below 0.05.
+
+In contrast, comparisons among higher levels of failures (e.g., 1 vs 2, 2 vs 3, and 1 vs 3) are not statistically significant, as their confidence intervals include zero and the adjusted p-values are large.
+
+These findings suggest that the most substantial decrease in academic performance occurs after the first failure, while additional failures do not lead to proportionally large declines in final grade.
+
+
+## 4. Discussion
+
+### 4.1 Interpretation of `reason` Results
+
+Both the simple linear regression (Section 3.2.1) and one-way ANOVA (Section 3.2.2) show that school-choice reason has a statistically significant effect on final grade ($G3$), though the effect is relatively small.
+
+The intercept ($\hat{\beta}_0 = `r b["(Intercept)"]`$) is the estimated mean $G3$ for the course group, which is the largest group ($n = 285$). Students who chose the school for its reputation scored on average `r abs(b["reasonreputation"])` points higher than the course group ($\hat{\beta}_3 = `r b["reasonreputation"]`$, $p = `r round(coef_s["reasonreputation", "Pr(>|t|)"], 4)`$). On a 0–20 scale, a one-point difference is about 5% of the total range — noticeable, but not large. The home and other groups scored slightly lower than the course group, but these differences were smaller. These results suggest that students who chose their school for its reputation may be more motivated or more focused on academics, which could help explain their higher grades.
+
+The ANOVA result ($F(`r anova_df1`, `r anova_df2`) = `r anova_F`$, $p = `r anova_p`$) agrees with the SLR $F$-test, as expected — the two tests give the same result when there is a single categorical predictor. The Tukey HSD test shows which group pairs are significantly different, and the reputation group stands out the most.
+
+### 4.2 Interpretation of `address` Results
+
+The simple linear regression and the independent two-sample $t$-test  collectively address whether a student's living environment is associated with their final grade ($G3$). Both analyses yield the same conclusion: a student's home address has a statistically significant effect on their academic performance, though its overall explanatory power is relatively limited.
+
+In the regression model, the estimated intercept ($\hat{\beta}_0 = `r b_addr["(Intercept)"]`$) represents the mean final grade for students living in rural areas. The slope coefficient for urban residency ($\hat{\beta}_1 = `r b_addr["addressU"]`$) indicates that, on average, urban students score `r b_addr["addressU"]` points higher than their rural peers. The independent $t$-test confirms that this difference in means is statistically significant ($p < 0.05$).
+
+However, while geographic location is a valid predictor, the $R^2$ value (`r r2_addr`) reveals that `address` alone accounts for only `r round(r2_addr * 100, 1)`% of the variance in final grades. This suggests that the observed urban-rural achievement gap is not solely driven by the physical location itself. Instead, it is highly likely influenced by underlying confounding factors associated with urban versus rural demographics—such as differences in internet access, travel time to school, parental education levels, or availability of extracurricular support.
+
+### 4.3 Interpretation of `failures` Results
+In conclusion, this analysis demonstrates a clear and statistically significant relationship between past academic failures and final grade. Students with more past failures consistently achieve lower academic outcomes, with the most pronounced difference occurring between students with no failures and those with at least one failure.
+
+While past failures are shown to be an important predictor of performance, the relatively low $R^2$ value suggests that academic success is influenced by multiple factors beyond those considered in this model. These findings highlight the importance of early academic support and intervention to prevent initial failures, which appear to have the greatest impact on future performance.
+
+Future research could explore additional variables, such as study habits, attendance, or family background, to better understand the factors influencing student success and to develop more comprehensive predictive models.
+
+### 4.4 Model Assumptions
+
+Since the predictor is a single categorical variable, the concept of linearity is not directly applicable for categorical predictors — the model just estimates a mean for each group. Independence is a reasonable assumption because each student is a separate observation. Normality was checked using @fig-anova-qq, which shows some deviation in the tails, but this is common with bounded grade data. With $n = `r nrow(df_clean)`$ observations, the Central Limit Theorem means the $F$-test is likely to remain valid. Levene's test confirmed that the variance is equal across the four groups ($p = `r lev_p`$), so the equal-variance assumption is satisfied.
+
+### 4.5 Limitations
+
+There are several limitations to note. First, the group sizes are very different: the course group ($n = 285$) is almost four times larger than the other group ($n = 72$). This reduces our ability to detect differences in the smaller groups and makes their results less stable. Second, $R^2 = `r r2`$ shows that school-choice reason only explains `r round(r2 * 100, 1)`% of the variation in $G3$. Other factors, such as study time, parental education, or past academic performance, likely explain much of the remaining variation. This means the grade differences between groups may partly reflect these other factors rather than school-choice reason itself. Third, the data come from only two schools in Portugal over one academic year, so the results may not apply to other schools or countries.
+
+\newpage
+
+## 5. Conclusion
+
+### 5.1 Key Findings
+
+Our analysis confirms that past academic failures are the strongest predictor of final grade among the three factors examined. Students with at least one prior failure scored, on average, approximately four points lower than those with no failures, and this gap did not grow substantially with additional failures. School-choice reason and home address were both statistically significant predictors, but their effect sizes were considerably smaller — each explaining only a small fraction of the variance in final grades. Taken together, the low R² values across all three models suggest that academic outcomes are shaped by a wide range of factors beyond those captured here.
+                                                                            
+### 5.2 Implications
+                                                                                
+For educators and policymakers, these findings point to the importance of early academic intervention. Since the sharpest decline in performance is associated with a student's first failure, identifying and supporting at-risk students before failures accumulate may have the greatest impact on long-term outcomes. The observed urban-rural gap in grades also warrants attention: while this study cannot determine its cause, prior research suggests that differences in resource access, travel time, and parental education levels may contribute. Efforts to reduce these disparities could help improve equity in educational outcomes.
+
+### 5.3 Remaining Questions
+
+This study provides a starting point, but a large portion of the variation in student performance remains unexplained by the variables examined. The dataset does not include measures of mental health, family support, study habits, or socio-economic status — all of which likely play important roles. Future research incorporating these dimensions, and drawing on more diverse datasets across different school systems, would provide a more complete picture of the factors that shape student success.
+
+\newpage
+
+## References
+
+::: {#refs}
+:::
+
+## Acknowledgement: We would like to acknowledge the use of Gemini to assist with the professional formatting of tables and data visualizations throughout this report.
+
+\newpage
+
+# Appendix: Full R Code
+
+## A.1 Setup and Data Loading
+
+```{r}
+#| echo: true
+#| eval: false
+#| ref-label: !expr c("setup-libraries", "setup-executive-summary", "setup-data-check", "load-reason-data")
+```
+
+## A.2 EDA: `reason` (Section 2.2.1)
+
+```{r}
+#| echo: true
+#| eval: false
+#| ref-label: !expr c("tbl-reason-summary", "fig-reason-overview", "fig-g3-hist", "tbl-reason-zero")
+```
+
+## A.3 EDA: `address` (Section 2.2.2)
+
+```{r}
+#| echo: true
+#| eval: false
+#| ref-label: !expr c("tbl-address-summary", "fig-address-bar", "tbl-address-zero", "fig-address-box")
+```
+
+## A.4 EDA: `failures` (Section 2.2.3)
+
+```{r}
+#| echo: true
+#| eval: false
+#| ref-label: !expr c("tbl-failures-summary", "tbl-zero", "fig-failures-bar", "fig-failures-box", "fig-density", "fig-failures-scatter")
+```
+
+## A.5 SLR and Diagnostics: `reason` (Section 3.2.1)
+
+```{r}
+#| echo: true
+#| eval: false
+#| ref-label: !expr c("setup-reason-model", "setup-clean-data", "fit-reason-slr", "reason-confint", "reason-stats", "tbl-reason-coef", "reason-diag-data", "fig-resid-fitted", "fig-scale-location", "fig-slr-qq")
+```
+
+## A.6 One-Way ANOVA: `reason` (Section 3.2.2)
+
+```{r}
+#| echo: true
+#| eval: false
+#| ref-label: !expr c("fig-anova-qq", "reason-levene", "reason-anova-results", "reason-anova-stats", "reason-tukey-raw", "fig-tukey")
+```
+
+## A.7 SLR and t-test: `address` (Section 3.3)
+
+```{r}
+#| echo: true
+#| eval: false
+#| ref-label: !expr c("fit-address-slr", "address-confint", "address-stats", "address-ttest")
+```
+
+## A.8 SLR, Diagnostics, and ANOVA: `failures` (Section 3.4)
+
+```{r}
+#| echo: true
+#| eval: false
+#| ref-label: !expr c("fit-failures-slr", "failures-fstat", "tbl-modelfit", "fig-diagnostics-failures", "tbl-anova-fail", "tbl-turkey-fail")
+```
