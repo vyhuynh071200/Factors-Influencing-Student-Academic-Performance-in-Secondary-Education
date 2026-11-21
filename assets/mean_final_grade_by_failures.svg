@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="930" height="475" viewBox="0 0 930 475" role="img" aria-labelledby="ttl des">
+<title id="ttl">Mean final grades grouped by previous class failures</title>
+<desc id="des">Descriptive values documented in the group's project README: zero failures 12.51 (n 549), one failure 8.64 (n 70), two failures 8.81 (n 16), three failures 8.07 (n 14).</desc>
+<style>
+  .title{font:700 24px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#19314F}
+  .sub{font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#5B6E82}
+  .label{font:600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#263D56}
+  .mean{font:700 15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#19314F}
+  .count{font:12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#697B8D}
+</style>
+<rect width="930" height="475" rx="18" fill="#FFFFFF"/>
+<rect x="22" y="20" width="886" height="435" rx="16" fill="#F8FAFD" stroke="#DFE7F0"/>
+<text x="42" y="63" class="title">Previous failures vs. final grades</text>
+<text x="42" y="91" class="sub">Descriptive group means · Final grade G3 (0–20 scale)</text>
+<line x1="232" y1="124" x2="232" y2="394" stroke="#D2DFEB" stroke-width="1.5"/>
+<g>
+  <text x="44" y="165" class="label">0 failures</text>
+  <rect x="232" y="139" width="580" height="30" rx="7" fill="#E8EEF4"/>
+  <rect x="232" y="139" width="362.79" height="30" rx="7" fill="#1D8290"/>
+  <text x="604.79" y="161" class="mean">12.51</text>
+  <text x="45" y="187" class="count">n = 549</text>
+</g>
+<g>
+  <text x="44" y="232" class="label">1 failure</text>
+  <rect x="232" y="206" width="580" height="30" rx="7" fill="#E8EEF4"/>
+  <rect x="232" y="206" width="250.56" height="30" rx="7" fill="#5D7DA5"/>
+  <text x="492.56000000000006" y="228" class="mean">8.64</text>
+  <text x="45" y="254" class="count">n = 70</text>
+</g>
+<g>
+  <text x="44" y="299" class="label">2 failures</text>
+  <rect x="232" y="273" width="580" height="30" rx="7" fill="#E8EEF4"/>
+  <rect x="232" y="273" width="255.49" height="30" rx="7" fill="#5D7DA5"/>
+  <text x="497.49" y="295" class="mean">8.81</text>
+  <text x="45" y="321" class="count">n = 16</text>
+</g>
+<g>
+  <text x="44" y="366" class="label">3 failures</text>
+  <rect x="232" y="340" width="580" height="30" rx="7" fill="#E8EEF4"/>
+  <rect x="232" y="340" width="234.03" height="30" rx="7" fill="#5D7DA5"/>
+  <text x="476.03" y="362" class="mean">8.07</text>
+  <text x="45" y="388" class="count">n = 14</text>
+</g>
+<line x1="42" y1="421" x2="883" y2="421" stroke="#DAE3EB"/>
+<text x="42" y="441" class="sub">Group project summary data · Association only, not a causal effect.</text>
+</svg>
